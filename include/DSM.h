@@ -96,23 +96,6 @@ public:
   bool cas_write_sync(RdmaOpRegion &cas_ror, RdmaOpRegion &write_ror,
                       uint64_t equal, uint64_t val, CoroPull* sink = nullptr);
 
-  void cas_mask(GlobalAddress gaddr, uint64_t equal, uint64_t val,
-                uint64_t *rdma_buffer, uint64_t compare_mask = ~(0ull), uint64_t swap_mask = ~(0ull),
-                bool signal = true, CoroPull* sink = nullptr);
-  bool cas_mask_sync(GlobalAddress gaddr, uint64_t equal, uint64_t val,
-                     uint64_t *rdma_buffer, uint64_t compare_mask = ~(0ull), uint64_t swap_mask = ~(0ull),  // !!NOTE: the swap_mask must contains compare_mask
-                     CoroPull* sink = nullptr);
-  bool cas_mask_sync_without_sink(GlobalAddress gaddr, uint64_t equal, uint64_t val,
-                                  uint64_t *rdma_buffer, uint64_t compare_mask, uint64_t swap_mask,  // !!NOTE: the swap_mask must contains compare_mask
-                                  CoroPull* sink, CoroQueue* waiting_queue);
-
-  void faa_boundary(GlobalAddress gaddr, uint64_t add_val,
-                    uint64_t *rdma_buffer, uint64_t mask = 63,
-                    bool signal = true, CoroPull* sink = nullptr);
-  void faa_boundary_sync(GlobalAddress gaddr, uint64_t add_val,
-                         uint64_t *rdma_buffer, uint64_t mask = 63,
-                         CoroPull* sink = nullptr);
-
   // for on-chip device memory
   void read_dm(char *buffer, GlobalAddress gaddr, size_t size,
                bool signal = true, CoroPull* sink = nullptr);
@@ -130,19 +113,6 @@ public:
   bool cas_dm_sync(GlobalAddress gaddr, uint64_t equal, uint64_t val,
                    uint64_t *rdma_buffer, CoroPull* sink = nullptr);
 
-  void cas_dm_mask(GlobalAddress gaddr, uint64_t equal, uint64_t val,
-                   uint64_t *rdma_buffer, uint64_t compare_mask = ~(0ull), uint64_t swap_mask = ~(0ull),
-                   bool signal = true, CoroPull* sink = nullptr);
-  bool cas_dm_mask_sync(GlobalAddress gaddr, uint64_t equal, uint64_t val,
-                        uint64_t *rdma_buffer, uint64_t compare_mask = ~(0ull), uint64_t swap_mask = ~(0ull),
-                        CoroPull* sink = nullptr);
-
-  void faa_dm_boundary(GlobalAddress gaddr, uint64_t add_val,
-                       uint64_t *rdma_buffer, uint64_t mask = 63,
-                       bool signal = true, CoroPull* sink = nullptr);
-  void faa_dm_boundary_sync(GlobalAddress gaddr, uint64_t add_val,
-                            uint64_t *rdma_buffer, uint64_t mask = 63,
-                            CoroPull* sink = nullptr);
 
   uint64_t poll_rdma_cq(int count = 1);
   bool poll_rdma_cq_once(uint64_t &wr_id);
