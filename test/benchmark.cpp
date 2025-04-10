@@ -103,6 +103,11 @@ DSM *dsm;
 
 inline Key to_key(uint64_t k) {
   uint64_t hash = (CityHash64((char *)&k, sizeof(k)) + 1) % kKeySpace;
+  // hash cant be 0, 0 rehash
+  if (hash == 0) {
+    hash = (CityHash64((char *)&hash, sizeof(k)) + 1) % kKeySpace;
+  }
+
   Key result;
   for (int i = 0; i < 8; i++) {
     result[i] = (hash >> (i * 8)) & 0xFF;
@@ -197,8 +202,8 @@ void generate_workload() {
   memcpy(&bulk_array[0], &space_array[0], sizeof(uint64_t) * bulk_load_num);
 
   uint64_t regular_node_insert_num =
-      static_cast<uint64_t>(thread_warmup_insert_num * kMaxThread) +
-      static_cast<uint64_t>(thread_workload_insert_num * kMaxThread);
+      static_cast<uint64_t>(thread_warmup_insert_num * kThreadCount) +
+      static_cast<uint64_t>(thread_workload_insert_num * kThreadCount);
   insert_array =
       space_array + bulk_load_num + regular_node_insert_num * node_id;
   // assert((bulk_load_num + regular_node_insert_num * node_id +
@@ -312,20 +317,24 @@ void generate_workload() {
       }
       if (key_value)
         if (random_num < kReadRatio) {
-          key_value = key_value | (static_cast<uint64_t>(op_type::Lookup) << 56);
+          key_value =
+              key_value | (static_cast<uint64_t>(op_type::Lookup) << 56);
         } else if (random_num < insertmark) {
-          key_value = key_value | (static_cast<uint64_t>(op_type::Insert) << 56);
+          key_value =
+              key_value | (static_cast<uint64_t>(op_type::Insert) << 56);
         } else if (random_num < updatemark) {
-          key_value = key_value | (static_cast<uint64_t>(op_type::Update) << 56);
+          key_value =
+              key_value | (static_cast<uint64_t>(op_type::Update) << 56);
         } else if (random_num < deletemark) {
-          key_value = key_value | (static_cast<uint64_t>(op_type::Delete) << 56);
+          key_value =
+              key_value | (static_cast<uint64_t>(op_type::Delete) << 56);
         } else {
           key_value = key_value | (static_cast<uint64_t>(op_type::Range) << 56);
         }
       workload_array[i] = to_key(key_value);
       ++i;
     }
-  }     
+  }
   std::cout << "node op num: " << per_node_op_num << std::endl;
   // std::shuffle(&workload_array[0], &workload_array[node_op_num - 1], gen);
   per_thread_op_num = per_node_op_num / kThreadCount;
@@ -348,12 +357,10 @@ void generate_workload() {
   std::cout << "Finish all workload generation" << std::endl;
 }
 
-
 #define LOADER_NUM 8  // [CONFIG] 8
 std::default_random_engine e;
 std::uniform_int_distribution<Value> randval(define::kValueMin,
                                              define::kValueMax);
-
 
 struct partition_info {
   uint64_t *array;
@@ -366,7 +373,7 @@ void bulk_load() {
   uint32_t node_id = dsm->getMyNodeID();
   uint32_t compute_num = dsm->getComputeNum();
   if (node_id >= compute_num) {
-    return; 
+    return;
   }
   // std::cout << "Smart real leaf size = " << sizeof(smart::Leaf) <<
   // std::endl;
@@ -397,7 +404,7 @@ void bulk_load() {
       Key smart_k = to_key(array[i]);
       // std::cout << i << " start insert key-------------- " << array[i]
       //           << std::endl;
-      tree->insert(smart_k, randval(e)); 
+      tree->insert(smart_k, randval(e));
       // std::cout << i << " finish insert key------------- " << array[i]
       //           << std::endl;
       // std::cout << std::endl;
@@ -436,8 +443,10 @@ void thread_run(int id) {
   // cachepush::decision.clear();
   // cachepush::decision.set_total_num(total_num[idx]);
   // Every thread set its own warmup/workload range
-  std::array<uint8_t, 8> *thread_workload_array = workload_array + id * per_thread_op_num;
-  std::array<uint8_t, 8> *thread_warmup_array = warmup_array + id * per_thread_warmup_num;
+  std::array<uint8_t, 8> *thread_workload_array =
+      workload_array + id * per_thread_op_num;
+  std::array<uint8_t, 8> *thread_warmup_array =
+      warmup_array + id * per_thread_warmup_num;
   // uint64_t *thread_workload_array = new uint64_t[thread_op_num];
   // uint64_t *thread_warmup_array = new uint64_t[thread_warmup_num];
   // memcpy(thread_workload_array, thread_workload_array_in_global,
@@ -615,8 +624,6 @@ void thread_run(int id) {
   // std::cout << "Real rpc ratio = " << tree->get_rpc_ratio() << std::endl;
 }
 
-
-
 void parse_args(int argc, char *argv[]) {
   if (argc != 16) {
     printf("argc = %d\n", argc);
@@ -756,251 +763,258 @@ int main(int argc, char *argv[]) {
   if (node_id < CNodeCount) {
     dsm->registerThread();
     tree = new Tree(dsm);
+
+    if (dsm->getMyNodeID() == 0) {
+      for (uint64_t i = 1; i < 1024000; ++i) {
+        tree->insert(to_key(i), i * 2);
+      }
+    }
+
     dsm->barrier("init__benchmark", CNodeCount);
     generate_workload();
     bulk_load();
 
     dsm->barrier("bulkload--finish", CNodeCount);
 
-
     std::cout << node_id << " is ready for the benchmark" << std::endl;
+
+    dsm->resetThread();
+    reset_all_params();
 
     std::thread ths[MAX_APP_THREAD];
 
-      // thread_run(0);
-      for (int i = 0; i < kThreadCount; i++) {
-        ths[i] = std::thread(thread_run, i);
+    // thread_run(0);
+    for (int i = 0; i < kThreadCount; i++) {
+      ths[i] = std::thread(thread_run, i);
+    }
+
+    // Warmup
+    auto start = std::chrono::high_resolution_clock::now();
+    while (!ready.load()) {
+      sleep(2);
+      auto end = std::chrono::high_resolution_clock::now();
+      auto duration =
+          std::chrono::duration_cast<std::chrono::seconds>(end - start).count();
+      if (time_based && duration >= 30) {
+        per_thread_warmup_num = 0;
+      }
+    }
+
+    // Main thread is used to collect the statistics
+    timespec s, e;
+    uint64_t pre_tp = 0;
+    uint64_t pre_ths[MAX_APP_THREAD];
+    for (int i = 0; i < MAX_APP_THREAD; ++i) {
+      pre_ths[i] = 0;
+    }
+
+    ready_to_report.store(true);
+    clock_gettime(CLOCK_REALTIME, &s);
+    bool start_generate_throughput = false;
+
+    std::cout << "Start collecting the statistic" << std::endl;
+    start = std::chrono::high_resolution_clock::now();
+    // System::profile("dex-test", [&]() {
+    int iter = 0;
+    while (true) {
+      sleep(2);
+      clock_gettime(CLOCK_REALTIME, &e);
+      int microseconds = (e.tv_sec - s.tv_sec) * 1000000 +
+                         (double)(e.tv_nsec - s.tv_nsec) / 1000;
+
+      uint64_t all_tp = 0;
+      for (int i = 0; i < kThreadCount; ++i) {
+        all_tp += tp[i][0];
       }
 
-      // Warmup
-      auto start = std::chrono::high_resolution_clock::now();
-      while (!ready.load()) {
-        sleep(2);
-        auto end = std::chrono::high_resolution_clock::now();
-        auto duration =
-            std::chrono::duration_cast<std::chrono::seconds>(end - start)
-                .count();
-        if (time_based && duration >= 30) {
-          per_thread_warmup_num = 0;
-        }
+      // Throughput in current phase (for very two seconds)
+      uint64_t cap = all_tp - pre_tp;
+      pre_tp = all_tp;
+
+      for (int i = 0; i < kThreadCount; ++i) {
+        auto val = tp[i][0];
+        pre_ths[i] = val;
       }
 
-      // Main thread is used to collect the statistics
-      timespec s, e;
-      uint64_t pre_tp = 0;
-      uint64_t pre_ths[MAX_APP_THREAD];
-      for (int i = 0; i < MAX_APP_THREAD; ++i) {
-        pre_ths[i] = 0;
-      }
-
-      ready_to_report.store(true);
       clock_gettime(CLOCK_REALTIME, &s);
-      bool start_generate_throughput = false;
+      double per_node_tp = cap * 1.0 / microseconds;
 
-      std::cout << "Start collecting the statistic" << std::endl;
-      start = std::chrono::high_resolution_clock::now();
-      // System::profile("dex-test", [&]() {
-      int iter = 0;
-      while (true) {
-        sleep(2);
-        clock_gettime(CLOCK_REALTIME, &e);
-        int microseconds = (e.tv_sec - s.tv_sec) * 1000000 +
-                           (double)(e.tv_nsec - s.tv_nsec) / 1000;
+      // FIXME(BT): use static counter for increment, need fix
+      // uint64_t cluster_tp =
+      //     dsm->sum((uint64_t)(per_node_tp * 1000), CNodeCount);
+      uint64_t cluster_tp = dsm->sum_with_prefix(
+          std::string("sum-") + std::string("-") + std::to_string(iter),
+          (uint64_t)(per_node_tp * 1000), CNodeCount);
 
-        uint64_t all_tp = 0;
-        for (int i = 0; i < kThreadCount; ++i) {
-          all_tp += tp[i][0];
+      // uint64_t cluster_tp = 0;
+      printf("%d, throughput %.4f\n", dsm->getMyNodeID(), per_node_tp);
+      // save_latency(iter);
+
+      if (dsm->getMyNodeID() == 0) {
+        printf("cluster throughput %.3f\n", cluster_tp / 1000.0);
+
+        if (cluster_tp != 0) {
+          start_generate_throughput = true;
         }
 
-        // Throughput in current phase (for very two seconds)
-        uint64_t cap = all_tp - pre_tp;
-        pre_tp = all_tp;
-
-        for (int i = 0; i < kThreadCount; ++i) {
-          auto val = tp[i][0];
-          pre_ths[i] = val;
+        // Means this Cnode already finish the workload
+        if (start_generate_throughput && cluster_tp == 0) {
+          auto end = std::chrono::high_resolution_clock::now();
+          auto duration =
+              std::chrono::duration_cast<std::chrono::seconds>(end - start)
+                  .count();
+          std::cout << "The time duration = " << duration << " seconds"
+                    << std::endl;
+          break;
         }
 
-        clock_gettime(CLOCK_REALTIME, &s);
-        double per_node_tp = cap * 1.0 / microseconds;
-
-        // FIXME(BT): use static counter for increment, need fix
-        // uint64_t cluster_tp =
-        //     dsm->sum((uint64_t)(per_node_tp * 1000), CNodeCount);
-        uint64_t cluster_tp =
-            dsm->sum_with_prefix(std::string("sum-") +
-                                     std::string("-") + std::to_string(iter),
-                                 (uint64_t)(per_node_tp * 1000), CNodeCount);
-
-        // uint64_t cluster_tp = 0;
-        printf("%d, throughput %.4f\n", dsm->getMyNodeID(), per_node_tp);
-        // save_latency(iter);
-
-        if (dsm->getMyNodeID() == 0) {
-          printf("cluster throughput %.3f\n", cluster_tp / 1000.0);
-
-          if (cluster_tp != 0) {
-            start_generate_throughput = true;
-          }
-
-          // Means this Cnode already finish the workload
-          if (start_generate_throughput && cluster_tp == 0) {
-            auto end = std::chrono::high_resolution_clock::now();
-            auto duration =
-                std::chrono::duration_cast<std::chrono::seconds>(end - start)
-                    .count();
-            std::cout << "The time duration = " << duration << " seconds"
+        if (start_generate_throughput) {
+          ++collect_times;
+          collect_throughput += cluster_tp / 1000.0;
+          auto end = std::chrono::high_resolution_clock::now();
+          auto duration =
+              std::chrono::duration_cast<std::chrono::seconds>(end - start)
+                  .count();
+          if (time_based && duration > 60) {
+            std::cout << "Running time is larger than " << 60 << "seconds"
                       << std::endl;
+            per_thread_op_num = 0;
             break;
           }
+        }
+      } else {
+        if (cluster_tp != 0) {
+          start_generate_throughput = true;
+        }
 
-          if (start_generate_throughput) {
-            ++collect_times;
-            collect_throughput += cluster_tp / 1000.0;
-            auto end = std::chrono::high_resolution_clock::now();
-            auto duration =
-                std::chrono::duration_cast<std::chrono::seconds>(end - start)
-                    .count();
-            if (time_based && duration > 60) {
-              std::cout << "Running time is larger than " << 60 << "seconds"
-                        << std::endl;
-              per_thread_op_num = 0;
-              break;
-            }
-          }
-        } else {
-          if (cluster_tp != 0) {
-            start_generate_throughput = true;
-          }
+        if (start_generate_throughput && per_node_tp == 0) break;
 
-          if (start_generate_throughput && per_node_tp == 0) break;
-
-          if (start_generate_throughput) {
-            ++collect_times;
-            auto end = std::chrono::high_resolution_clock::now();
-            auto duration =
-                std::chrono::duration_cast<std::chrono::seconds>(end - start)
-                    .count();
-            if (time_based && duration > 60) {
-              per_thread_op_num = 0;
-              break;
-            }
+        if (start_generate_throughput) {
+          ++collect_times;
+          auto end = std::chrono::high_resolution_clock::now();
+          auto duration =
+              std::chrono::duration_cast<std::chrono::seconds>(end - start)
+                  .count();
+          if (time_based && duration > 60) {
+            per_thread_op_num = 0;
+            break;
           }
         }
-        ++iter;
-      }  // while(true) loop
-         //});
+      }
+      ++iter;
+    }  // while(true) loop
+       //});
 
+    sleep(2);
+    while (worker.load() != 0) {
       sleep(2);
-      while (worker.load() != 0) {
-        sleep(2);
-      }
+    }
 
-      for (int i = 0; i < kThreadCount; i++) {
-        ths[i].join();
-      }
-      // for (int i = 0; i < memThreadCount; i ++) {
-      //   overhead_th[i].join();
-      // }
+    for (int i = 0; i < kThreadCount; i++) {
+      ths[i].join();
+    }
+    // for (int i = 0; i < memThreadCount; i ++) {
+    //   overhead_th[i].join();
+    // }
 
-      // for (int i = 0; i < kThreadCount; ++i) {
-      //   total_max_time = std::max_element(total_time, total_time + k)
-      // }
-      total_max_time = *std::max_element(total_time, total_time + kThreadCount);
-      if (workload_type == WorkLoadType::uniform ||
-          workload_type == WorkLoadType::zipf) {
-        total_cluster_max_time = total_max_time;
-      } else if (workload_type == WorkLoadType::gaussian_01 ||
-                 workload_type == WorkLoadType::gaussian_001) {
-        total_cluster_max_time = dsm->max_total(total_max_time, CNodeCount);
-      } else {
-        assert(false);
-      }
-      // total_cluster_max_time = dsm->max_total(total_max_time, CNodeCount);
-      std::cout << "XMD node max time: " << total_max_time;
-      std::cout << "XMD cluster max time: " << total_cluster_max_time;
+    // for (int i = 0; i < kThreadCount; ++i) {
+    //   total_max_time = std::max_element(total_time, total_time + k)
+    // }
+    total_max_time = *std::max_element(total_time, total_time + kThreadCount);
+    if (workload_type == WorkLoadType::uniform ||
+        workload_type == WorkLoadType::zipf) {
+      total_cluster_max_time = total_max_time;
+    } else if (workload_type == WorkLoadType::gaussian_01 ||
+               workload_type == WorkLoadType::gaussian_001) {
+      total_cluster_max_time = dsm->max_total(total_max_time, CNodeCount);
+    } else {
+      assert(false);
+    }
+    // total_cluster_max_time = dsm->max_total(total_max_time, CNodeCount);
+    std::cout << "XMD node max time: " << total_max_time;
+    std::cout << "XMD cluster max time: " << total_cluster_max_time;
 
-      uint64_t XMDsetting_node_throughput =
-          execute_op.load() /
-          (static_cast<double>(total_cluster_max_time) / std::pow(10, 6));
-      uint64_t XMDsetting_cluster_throughput =
-          dsm->sum_total(XMDsetting_node_throughput, CNodeCount, false);
+    uint64_t XMDsetting_node_throughput =
+        execute_op.load() /
+        (static_cast<double>(total_cluster_max_time) / std::pow(10, 6));
+    uint64_t XMDsetting_cluster_throughput =
+        dsm->sum_total(XMDsetting_node_throughput, CNodeCount, false);
 
-      std::cout << "XMD node throughput: "
-                << (static_cast<double>(XMDsetting_node_throughput) /
-                    std::pow(10, 6))
-                << " MOPS" << std::endl;
-      std::cout << "XMD cluster throughput: "
-                << (static_cast<double>(XMDsetting_cluster_throughput) /
-                    std::pow(10, 6))
-                << " MOPS" << std::endl;
-      std::cout << "XMD cluster latency: node " << node_id << " " << std::endl;
-      cal_latency();
+    std::cout << "XMD node throughput: "
+              << (static_cast<double>(XMDsetting_node_throughput) /
+                  std::pow(10, 6))
+              << " MOPS" << std::endl;
+    std::cout << "XMD cluster throughput: "
+              << (static_cast<double>(XMDsetting_cluster_throughput) /
+                  std::pow(10, 6))
+              << " MOPS" << std::endl;
+    std::cout << "XMD cluster latency: node " << node_id << " " << std::endl;
+    cal_latency();
 
-      std::cout << "XMD RDMA info: " << node_id << " " << std::endl;
+    std::cout << "XMD RDMA info: " << node_id << " " << std::endl;
 
-      uint64_t rdma_read_num = dsm->get_rdma_read_num();
-      uint64_t rdma_write_num = dsm->get_rdma_write_num();
-      uint64_t rdma_read_time = dsm->get_rdma_read_time();
-      uint64_t rdma_write_time = dsm->get_rdma_write_time();
-      int64_t rdma_read_size = dsm->get_rdma_read_size();
-      uint64_t rdma_write_size = dsm->get_rdma_write_size();
-      uint64_t rdma_cas_num = dsm->get_rdma_cas_num();
-      uint64_t rdma_rpc_num = dsm->get_rdma_rpc_num();
-      std::cout << "Avg. rdma read time(ms) = "
-                << static_cast<double>(rdma_read_time) / 1000 / rdma_read_num
-                << std::endl;
-      std::cout << "Avg. rdma write time(ms) = "
-                << static_cast<double>(rdma_write_time) / 1000 / rdma_write_num
-                << std::endl;
-      std::cout << "Avg. rdma read / op = "
-                << static_cast<double>(rdma_read_num) / execute_op.load()
-                << std::endl;
-      std::cout << "Avg. rdma write / op = "
-                << static_cast<double>(rdma_write_num) / execute_op.load()
-                << std::endl;
-      std::cout << "Avg. rdma cas / op = "
-                << static_cast<double>(rdma_cas_num) / execute_op.load()
-                << std::endl;
-      std::cout << "Avg. rdma rpc / op = "
-                << static_cast<double>(rdma_rpc_num) / execute_op.load()
-                << std::endl;
-      std::cout << "Avg. all rdma / op = "
-                << static_cast<double>(rdma_read_num + rdma_write_num +
-                                       rdma_cas_num + rdma_rpc_num) /
-                       execute_op.load()
-                << std::endl;
-      std::cout << "Avg. rdma read size/ op = "
-                << static_cast<double>(rdma_read_size) / execute_op.load()
-                << std::endl;
-      std::cout << "Avg. rdma write size / op = "
-                << static_cast<double>(rdma_write_size) / execute_op.load()
-                << std::endl;
-      std::cout << "Avg. rdma RW size / op = "
-                << static_cast<double>(rdma_read_size + rdma_write_size) /
-                       execute_op.load()
-                << std::endl;
+    uint64_t rdma_read_num = dsm->get_rdma_read_num();
+    uint64_t rdma_write_num = dsm->get_rdma_write_num();
+    uint64_t rdma_read_time = dsm->get_rdma_read_time();
+    uint64_t rdma_write_time = dsm->get_rdma_write_time();
+    int64_t rdma_read_size = dsm->get_rdma_read_size();
+    uint64_t rdma_write_size = dsm->get_rdma_write_size();
+    uint64_t rdma_cas_num = dsm->get_rdma_cas_num();
+    uint64_t rdma_rpc_num = dsm->get_rdma_rpc_num();
+    std::cout << "Avg. rdma read time(ms) = "
+              << static_cast<double>(rdma_read_time) / 1000 / rdma_read_num
+              << std::endl;
+    std::cout << "Avg. rdma write time(ms) = "
+              << static_cast<double>(rdma_write_time) / 1000 / rdma_write_num
+              << std::endl;
+    std::cout << "Avg. rdma read / op = "
+              << static_cast<double>(rdma_read_num) / execute_op.load()
+              << std::endl;
+    std::cout << "Avg. rdma write / op = "
+              << static_cast<double>(rdma_write_num) / execute_op.load()
+              << std::endl;
+    std::cout << "Avg. rdma cas / op = "
+              << static_cast<double>(rdma_cas_num) / execute_op.load()
+              << std::endl;
+    std::cout << "Avg. rdma rpc / op = "
+              << static_cast<double>(rdma_rpc_num) / execute_op.load()
+              << std::endl;
+    std::cout << "Avg. all rdma / op = "
+              << static_cast<double>(rdma_read_num + rdma_write_num +
+                                     rdma_cas_num + rdma_rpc_num) /
+                     execute_op.load()
+              << std::endl;
+    std::cout << "Avg. rdma read size/ op = "
+              << static_cast<double>(rdma_read_size) / execute_op.load()
+              << std::endl;
+    std::cout << "Avg. rdma write size / op = "
+              << static_cast<double>(rdma_write_size) / execute_op.load()
+              << std::endl;
+    std::cout << "Avg. rdma RW size / op = "
+              << static_cast<double>(rdma_read_size + rdma_write_size) /
+                     execute_op.load()
+              << std::endl;
 
-      // uint64_t max_time = 0;
-      // for (int i = 0; i < kThreadCount; ++i) {
-      //   max_time = std::max<uint64_t>(max_time, total_time[i]);
-      // }
+    // uint64_t max_time = 0;
+    // for (int i = 0; i < kThreadCount; ++i) {
+    //   max_time = std::max<uint64_t>(max_time, total_time[i]);
+    // }
 
-      total_cluster_tp = dsm->sum_total(total_throughput, CNodeCount, false);
-      straggler_cluster_tp =
-          dsm->min_total(total_throughput / kThreadCount, CNodeCount);
-      straggler_cluster_tp = straggler_cluster_tp * totalThreadCount;
-      // op_num /
-      // (static_cast<double>(straggler_cluster_tp) / std::pow(10, 6));
+    total_cluster_tp = dsm->sum_total(total_throughput, CNodeCount, false);
+    straggler_cluster_tp =
+        dsm->min_total(total_throughput / kThreadCount, CNodeCount);
+    straggler_cluster_tp = straggler_cluster_tp * totalThreadCount;
+    // op_num /
+    // (static_cast<double>(straggler_cluster_tp) / std::pow(10, 6));
 
-      throughput_vec.push_back(total_cluster_tp);
-      straggler_throughput_vec.push_back(straggler_cluster_tp);
-      std::cout << "Round " 
-                << " (max_throughput): " << total_cluster_tp / std::pow(10, 6)
-                << " Mops/s" << std::endl;
-      std::cout << "Round " << " (straggler_throughput): "
-                << straggler_cluster_tp / std::pow(10, 6) << " Mops/s"
-                << std::endl;
+    throughput_vec.push_back(total_cluster_tp);
+    straggler_throughput_vec.push_back(straggler_cluster_tp);
+    std::cout << "Round "
+              << " (max_throughput): " << total_cluster_tp / std::pow(10, 6)
+              << " Mops/s" << std::endl;
+    std::cout << "Round " << " (straggler_throughput): "
+              << straggler_cluster_tp / std::pow(10, 6) << " Mops/s"
+              << std::endl;
   }
 
   std::cout << "Before barrier finish" << std::endl;
