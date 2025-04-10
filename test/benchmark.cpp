@@ -394,7 +394,7 @@ void bulk_load() {
     auto array = my_parition->array;
 
     for (uint64_t i = 0; i < num; ++i) {
-      Key smart_k = int2key(array[i]);
+      Key smart_k = to_key(array[i]);
       // std::cout << i << " start insert key-------------- " << array[i]
       //           << std::endl;
       tree->insert(smart_k, randval(e)); 
@@ -651,11 +651,7 @@ void parse_args(int argc, char *argv[]) {
   warmup_num = atoi(argv[13]) * 1000 * 1000;
   op_num = atoi(argv[14]) * 1000 * 1000;  // Here is total op_num => need to be
                                           // distributed across the bechmark
-  check_correctness = atoi(argv[15]);     // Whether we need to validate the
-                                       // corretness of the tree after running
-  time_based = atoi(argv[16]);
-  early_stop = atoi(argv[17]);
-  kMaxThread = atoi(argv[18]);
+  kMaxThread = atoi(argv[15]);
   // How to make insert ready?
   kKeySpace = bulk_load_num +
               ceil((op_num + warmup_num) * (kInsertRatio / 100.0)) + 1000;
