@@ -28,10 +28,6 @@ public:
     return GlobalAddress();
   };
 
-  static GlobalAddress Max() {
-    return GlobalAddress(MEMORY_NODE_NUM, 0);
-  };
-
   GlobalAddress operator+(int b) const {
     return GlobalAddress(nodeID, offset + b);
   }

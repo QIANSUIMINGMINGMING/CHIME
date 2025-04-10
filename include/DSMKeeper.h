@@ -86,7 +86,14 @@ public:
 
   ~DSMKeeper() { disconnectMemcached(); }
   void barrier(const std::string &barrierKey);
+  void barrier(const std::string &barrierKey, int node_num);
   uint64_t sum(const std::string &sum_key, uint64_t value);
+
+  uint64_t sum(const std::string &sum_key, uint64_t value, bool time_out);
+  uint64_t sum(const std::string &sum_key, uint64_t value, int node_num,
+               bool time_out);
+  uint64_t min(const std::string &max_key, uint64_t value, int node_num);
+  uint64_t max(const std::string &max_key, uint64_t value, int node_num);
 };
 
 #endif

@@ -204,7 +204,8 @@ void Tree::lock_node(const GlobalAddress &node_addr, uint64_t *lock_buffer, bool
 
   // lock function
   auto acquire_lock = [=](const GlobalAddress &node_addr) {
-    return dsm->cas_mask_sync(node_addr + lock_offset, 0UL, ~0UL, lock_buffer, 1ULL << 63, ~0ULL, sink);
+    // return dsm->cas_mask_sync(node_addr + lock_offset, 0UL, ~0UL, lock_buffer, 1ULL << 63, ~0ULL, sink);
+    return dsm->cas_sync(node_addr + lock_offset, 0UL, ~0UL, lock_buffer, sink);
   };
 
   uint64_t retry_cnt = 0;

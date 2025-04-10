@@ -53,6 +53,11 @@ DSM::DSM(const DSMConfig &conf)
     }
     Debug::notifyInfo("Memory server %d start up", myNodeID);
   }
+
+#ifdef COUNT_RDMA
+  clear_rdma_statistic();
+#endif
+
   keeper->barrier("DSM-init");
 }
 
@@ -134,6 +139,10 @@ void DSM::initRDMAConnection() {
 
 void DSM::read(char *buffer, GlobalAddress gaddr, size_t size, bool signal,
                CoroPull* sink) {
+#ifdef COUNT_RDMA
+  num_rdma_read[getMyThreadID()][0]++;
+  size_rdma_read[getMyThreadID()][0] += size;
+#endif
   if (sink == nullptr) {
     rdmaRead(iCon->data[0][gaddr.nodeID], (uint64_t)buffer,
              remoteInfo[gaddr.nodeID].dsmBase + gaddr.offset, size,
@@ -173,6 +182,10 @@ void DSM::read_sync_without_sink(char *buffer, GlobalAddress gaddr, size_t size,
 
 void DSM::write(const char *buffer, GlobalAddress gaddr, size_t size,
                 bool signal, CoroPull* sink) {
+#ifdef COUNT_RDMA
+  num_rdma_write[getMyThreadID()][0]++;
+  size_rdma_write[getMyThreadID()][0] += size;
+#endif
 
   if (sink == nullptr) {
     rdmaWrite(iCon->data[0][gaddr.nodeID], (uint64_t)buffer,
@@ -232,6 +245,12 @@ void DSM::fill_keys_dest(RdmaOpRegion &ror, GlobalAddress gaddr, bool is_chip) {
 }
 
 void DSM::read_batch(RdmaOpRegion *rs, int k, bool signal, CoroPull* sink) {
+#ifdef COUNT_RDMA
+  num_rdma_read[getMyThreadID()][0] += k;
+  for (int i = 0; i < k; ++i) {
+    size_rdma_read[getMyThreadID()][0] += rs[i].size;
+  }
+#endif
   int node_id = -1;
   for (int i = 0; i < k; ++i) {
     GlobalAddress gaddr;
@@ -295,6 +314,12 @@ void DSM::read_batches_sync(const std::vector<RdmaOpRegion>& rs, CoroPull* sink)
 }
 
 void DSM::write_batch(RdmaOpRegion *rs, int k, bool signal, CoroPull* sink) {
+#ifdef COUNT_RDMA
+  num_rdma_write[getMyThreadID()][0] += k;
+  for (int i = 0; i < k; ++i) {
+    size_rdma_write[getMyThreadID()][0] += rs[i].size;
+  }
+#endif
   int node_id = -1;
   for (int i = 0; i < k; ++i) {
     GlobalAddress gaddr;
@@ -372,6 +397,10 @@ void DSM::write_batches_sync(const std::vector<RdmaOpRegion>& rs, CoroPull* sink
 
 void DSM::write_faa(RdmaOpRegion &write_ror, RdmaOpRegion &faa_ror,
                     uint64_t add_val, bool signal, CoroPull* sink) {
+#ifdef COUNT_RDMA
+  num_rdma_cas[getMyThreadID()][0]++;
+  size_rdma_write[getMyThreadID()][0] += 8;
+#endif
   int node_id;
   {
     GlobalAddress gaddr;
@@ -406,6 +435,10 @@ void DSM::write_faa_sync(RdmaOpRegion &write_ror, RdmaOpRegion &faa_ror,
 void DSM::write_cas(RdmaOpRegion &write_ror, RdmaOpRegion &cas_ror,
                     uint64_t equal, uint64_t val, bool signal,
                     CoroPull* sink) {
+#ifdef COUNT_RDMA
+  num_rdma_cas[getMyThreadID()][0]++;
+  size_rdma_write[getMyThreadID()][0] += 8;
+#endif
   int node_id;
   {
     GlobalAddress gaddr;
@@ -440,6 +473,10 @@ void DSM::write_cas_sync(RdmaOpRegion &write_ror, RdmaOpRegion &cas_ror,
 void DSM::cas_read(RdmaOpRegion &cas_ror, RdmaOpRegion &read_ror,
                    uint64_t equal, uint64_t val, bool signal,
                    CoroPull* sink) {
+#ifdef COUNT_RDMA
+  num_rdma_cas[getMyThreadID()][0]++;
+  size_rdma_write[getMyThreadID()][0] += 8;
+#endif
   int node_id;
   {
     GlobalAddress gaddr;
@@ -563,6 +600,10 @@ bool DSM::cas_write_sync(RdmaOpRegion &cas_ror, RdmaOpRegion &write_ror,
 
 void DSM::cas(GlobalAddress gaddr, uint64_t equal, uint64_t val,
               uint64_t *rdma_buffer, bool signal, CoroPull* sink) {
+#ifdef COUNT_RDMA
+  num_rdma_cas[getMyThreadID()][0]++;
+  size_rdma_write[getMyThreadID()][0] += 8;
+#endif
 
   if (sink == nullptr) {
     rdmaCompareAndSwap(iCon->data[0][gaddr.nodeID], (uint64_t)rdma_buffer,
@@ -590,6 +631,24 @@ bool DSM::cas_sync(GlobalAddress gaddr, uint64_t equal, uint64_t val,
   return equal == *rdma_buffer;
 }
 
+void DSM::read_dm(char *buffer, GlobalAddress gaddr, size_t size, bool signal,
+                  CoroPull *sink) {
+#ifdef COUNT_RDMA
+  num_rdma_read[getMyThreadID()][0]++;
+  size_rdma_read[getMyThreadID()][0] += size;
+#endif
+  if (sink == nullptr) {
+    rdmaRead(iCon->data[0][gaddr.nodeID], (uint64_t)buffer,
+             remoteInfo[gaddr.nodeID].lockBase + gaddr.offset, size,
+             iCon->cacheLKey, remoteInfo[gaddr.nodeID].lockRKey[0], signal);
+  } else {
+    rdmaRead(iCon->data[0][gaddr.nodeID], (uint64_t)buffer,
+             remoteInfo[gaddr.nodeID].lockBase + gaddr.offset, size,
+             iCon->cacheLKey, remoteInfo[gaddr.nodeID].lockRKey[0], true,
+             sink->get());
+    (*sink)();
+  }
+}
 
 void DSM::read_dm_sync(char *buffer, GlobalAddress gaddr, size_t size,
                        CoroPull* sink) {
@@ -603,6 +662,10 @@ void DSM::read_dm_sync(char *buffer, GlobalAddress gaddr, size_t size,
 
 void DSM::write_dm(const char *buffer, GlobalAddress gaddr, size_t size,
                    bool signal, CoroPull* sink) {
+#ifdef COUNT_RDMA
+  num_rdma_write[getMyThreadID()][0]++;
+  size_rdma_write[getMyThreadID()][0] += size;
+#endif
   if (sink == nullptr) {
     rdmaWrite(iCon->data[0][gaddr.nodeID], (uint64_t)buffer,
               remoteInfo[gaddr.nodeID].lockBase + gaddr.offset, size,
@@ -629,7 +692,10 @@ void DSM::write_dm_sync(const char *buffer, GlobalAddress gaddr, size_t size,
 
 void DSM::cas_dm(GlobalAddress gaddr, uint64_t equal, uint64_t val,
                  uint64_t *rdma_buffer, bool signal, CoroPull* sink) {
-
+#ifdef COUNT_RDMA
+  num_rdma_cas[getMyThreadID()][0]++;
+  size_rdma_write[getMyThreadID()][0] += 8;
+#endif
   if (sink == nullptr) {
     rdmaCompareAndSwap(iCon->data[0][gaddr.nodeID], (uint64_t)rdma_buffer,
                        remoteInfo[gaddr.nodeID].lockBase + gaddr.offset, equal,

@@ -52,6 +52,8 @@ public:
 
   void memSet(const char *key, uint32_t klen, const char *val, uint32_t vlen);
   char *memGet(const char *key, uint32_t klen, size_t *v_size = nullptr);
+  char *memGet(const char *key, uint32_t klen, size_t *v_size,
+               bool timeout);
   uint64_t memFetchAndAdd(const char *key, uint32_t klen);
 };
 

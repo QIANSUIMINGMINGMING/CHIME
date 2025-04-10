@@ -14,6 +14,7 @@ class DSMConfig {
 public:
   CacheConfig cacheConfig;
   uint32_t machineNR;
+  uint32_t computeNR;
   uint32_t threadNR;
   uint64_t dsmSize;       // G
 

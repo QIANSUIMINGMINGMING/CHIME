@@ -74,11 +74,8 @@ void Keeper::serverEnter() {
                              &serverNum);
     if (rc == MEMCACHED_SUCCESS) {
       std::string ip(getIP());
-#ifdef STATIC_ID_FROM_IP
-      myNodeID = std::atoi(ip.substr(ip.find_last_of('.') + 1).c_str()) - 1;
-#else
+
       myNodeID = serverNum - 1;
-#endif
       Debug::notifyInfo("Compute server %d start up [%s]\n", myNodeID, ip.c_str());
       return;
     }
@@ -149,6 +146,37 @@ char *Keeper::memGet(const char *key, uint32_t klen, size_t *v_size) {
     *v_size = l;
   }
   
+  return res;
+}
+
+char *Keeper::memGet(const char *key, uint32_t klen, size_t *v_size,
+                     bool timeout) {
+  size_t l;
+  char *res;
+  uint32_t flags;
+  memcached_return rc;
+  auto start = std::chrono::high_resolution_clock::now();  // get start time
+
+  while (true) {
+    res = memcached_get(memc, key, klen, &l, &flags, &rc);
+    if (rc == MEMCACHED_SUCCESS) {
+      break;
+    }
+    usleep(400 * myNodeID);
+    auto end = std::chrono::high_resolution_clock::now();  // get end time
+    auto duration = std::chrono::duration_cast<std::chrono::seconds>(
+        end - start);  // calculate duration in microseconds
+    if (timeout && (duration.count() >= 10)) {
+      // std::cout << "Time out for memGet" << std::endl;
+      res = nullptr;
+      break;
+    }
+  }
+
+  if (v_size != nullptr) {
+    *v_size = l;
+  }
+
   return res;
 }
 

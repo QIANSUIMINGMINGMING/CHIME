@@ -162,6 +162,20 @@ void DSMKeeper::barrier(const std::string &barrierKey) {
   }
 }
 
+void DSMKeeper::barrier(const std::string &barrierKey, int num) {
+  std::string key = std::string("barrier-") + barrierKey;
+  if (this->getMyNodeID() == 0) {
+    memSet(key.c_str(), key.size(), "0", 1);
+  }
+  memFetchAndAdd(key.c_str(), key.size());
+  while (true) {
+    uint64_t v = std::stoull(memGet(key.c_str(), key.size()));
+    if (v == num) {
+      return;
+    }
+  }
+}
+
 uint64_t DSMKeeper::sum(const std::string &sum_key, uint64_t value) {
   std::string key_prefix = std::string("sum-") + sum_key;
 
@@ -177,4 +191,77 @@ uint64_t DSMKeeper::sum(const std::string &sum_key, uint64_t value) {
   }
 
   return ret;
+}
+
+uint64_t DSMKeeper::sum(const std::string &sum_key, uint64_t value,
+                        bool time_out) {
+  // std::cout << "in this funciton" << std::endl;
+  return sum(sum_key, value, this->getServerNR(), time_out);
+}
+
+uint64_t DSMKeeper::sum(const std::string &sum_key, uint64_t value,
+                        int node_num, bool time_out) {
+  // std::cout << "in long parameter function" << std::endl;
+  std::string key_prefix = std::string("sum-") + sum_key;
+
+  std::string key = key_prefix + std::to_string(this->getMyNodeID());
+  memSet(key.c_str(), key.size(), (char *)&value, sizeof(value));
+
+  uint64_t ret = 0;
+  // std::cout << "Node num = " << node_num << std::endl;
+  for (int i = 0; i < node_num; ++i) {
+    key = key_prefix + std::to_string(i);
+    auto mem_ret = memGet(key.c_str(), key.size(), nullptr, time_out);
+    if (mem_ret != nullptr) {
+      ret += *(uint64_t *)mem_ret;
+    }
+  }
+
+  return ret;
+}
+
+uint64_t DSMKeeper::min(const std::string &min_key, uint64_t value,
+                        int node_num) {
+  std::string key_prefix = std::string("min-") + min_key;
+
+  std::string key = key_prefix + std::to_string(this->getMyNodeID());
+  memSet(key.c_str(), key.size(), (char *)&value, sizeof(value));
+
+  uint64_t ret = 0;
+  uint64_t min = std::numeric_limits<uint64_t>::max();
+  for (int i = 0; i < node_num; ++i) {
+    key = key_prefix + std::to_string(i);
+    auto mem_ret = memGet(key.c_str(), key.size(), nullptr, false);
+    if (mem_ret != nullptr) {
+      auto cur_val = *(uint64_t *)mem_ret;
+      if (cur_val < min) {
+        min = cur_val;
+      }
+    }
+  }
+
+  return min;
+}
+
+uint64_t DSMKeeper::max(const std::string &max_key, uint64_t value,
+                        int node_num) {
+  std::string key_prefix = std::string("max-") + max_key;
+
+  std::string key = key_prefix + std::to_string(this->getMyNodeID());
+  memSet(key.c_str(), key.size(), (char *)&value, sizeof(value));
+
+  uint64_t ret = 0;
+  uint64_t max = 0;
+  for (int i = 0; i < node_num; ++i) {
+    key = key_prefix + std::to_string(i);
+    auto mem_ret = memGet(key.c_str(), key.size(), nullptr, false);
+    if (mem_ret != nullptr) {
+      auto cur_val = *(uint64_t *)(mem_ret);
+      if (cur_val > max) {
+        max = cur_val;
+      }
+    }
+  }
+
+  return max;
 }
