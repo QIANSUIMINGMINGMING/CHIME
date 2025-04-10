@@ -100,7 +100,7 @@ namespace define
   constexpr uint16_t kCacheLineSize = 64;
 
   // Remote Allocation
-  constexpr uint64_t dsmSize = 64;         // GB  [CONFIG] 64
+  constexpr uint64_t dsmSize = 96;         // GB  [CONFIG] 64
   constexpr uint64_t kChunkSize = 16 * MB; // B
 
   // Local Allocation
