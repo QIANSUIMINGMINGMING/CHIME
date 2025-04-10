@@ -757,6 +757,7 @@ int main(int argc, char *argv[]) {
     dsm->registerThread();
     tree = new Tree(dsm);
     dsm->barrier("init__benchmark", CNodeCount);
+    generate_workload();
     bulk_load();
 
     dsm->barrier("bulkload--finish", CNodeCount);
