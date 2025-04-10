@@ -618,7 +618,7 @@ void thread_run(int id) {
 
 
 void parse_args(int argc, char *argv[]) {
-  if (argc != 19) {
+  if (argc != 16) {
     printf("argc = %d\n", argc);
     printf(
         "Usage: ./benchmark kNodeCount kReadRatio kInsertRatio kUpdateRatio "
