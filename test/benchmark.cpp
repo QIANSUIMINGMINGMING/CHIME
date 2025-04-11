@@ -426,6 +426,76 @@ void bulk_load() {
   }
 }
 
+int kCoroCnt = 8;
+
+class RequsetGenBench : public RequstGen {
+ public:
+  RequsetGenBench(DSM *dsm, Request *req, int req_num, int coro_id,
+                  int coro_cnt)
+      : dsm(dsm),
+        req(req),
+        req_num(req_num),
+        coro_id(coro_id),
+        coro_cnt(coro_cnt) {
+    local_thread_id = dsm->getMyThreadID();
+    cur = coro_id;
+    epoch_id = 0;
+    extra_k = MAX_KEY_SPACE_SIZE +
+              kThreadCount * kCoroCnt * dsm->getMyNodeID() +
+              local_thread_id * kCoroCnt + coro_id;
+    flag = false;
+  }
+
+  Request next() override {
+    cur = (cur + coro_cnt) % req_num;
+    if (req[cur].req_type == INSERT) {
+      if (cur + coro_cnt >= req_num) {
+        // need_stop = true;
+        ++epoch_id;
+        flag = true;
+      }
+      if (flag) {
+        req[cur].k = int2key(extra_k);
+        extra_k += kThreadCount * kCoroCnt * dsm->getClusterSize();
+      }
+    }
+    tp[local_thread_id][coro_id]++;
+    req[cur].v = randval(e);  // make value different per-epoch
+    return req[cur];
+  }
+
+ private:
+  DSM *dsm;
+  Request *req;
+  int req_num;
+  int coro_id;
+  int coro_cnt;
+  int local_thread_id;
+  int cur;
+  uint8_t epoch_id;
+  uint64_t extra_k;
+  bool flag;
+};
+
+RequstGen *gen_func(DSM *dsm, Request *req, int req_num, int coro_id,
+                    int coro_cnt) {
+  return new RequsetGenBench(dsm, req, req_num, coro_id, coro_cnt);
+}
+
+void work_func(Tree *tree, const Request &r, CoroPull *sink) {
+  if (r.req_type == SEARCH) {
+    Value v;
+    tree->search(r.k, v, sink);
+  } else if (r.req_type == INSERT) {
+    tree->insert(r.k, r.v, sink);
+  } else if (r.req_type == UPDATE) {
+    tree->update(r.k, r.v, sink);
+  } else {
+    std::map<Key, Value> ret;
+    tree->range_query(r.k, r.k + r.range_size, ret);
+  }
+}
+
 void thread_run(int id) {
   // Interleave the thread binding
   // bindCore(id);
