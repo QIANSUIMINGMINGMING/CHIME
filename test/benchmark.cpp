@@ -103,18 +103,14 @@ uint64_t op_mask = (1ULL << 56) - 1;
 Tree *tree;
 DSM *dsm;
 
-inline Key to_key(uint64_t k) {
+inline uint64_t to_key(uint64_t k) {
   uint64_t hash = (CityHash64((char *)&k, sizeof(k)) + 1) % kKeySpace;
   // hash cant be 0, 0 rehash
   if (hash == 0) {
     hash = (CityHash64((char *)&hash, sizeof(k)) + 1) % kKeySpace;
   }
 
-  Key result;
-  for (int i = 0; i < 8; i++) {
-    result[i] = (hash >> (i * 8)) & 0xFF;
-  }
-  return result;
+  return hash;
 }
 
 std::atomic<int64_t> warmup_cnt{0};
@@ -155,11 +151,14 @@ uint64_t generate_key() {
   // static int counter = 0;
   // Key key;
   uint64_t key;
+  uint64_t dis;
   while (true) {
     if (workload_type == WorkLoadType::uniform) {
-      key = uniform_generator->next_id();
+      dis = uniform_generator->next_id();
+      key = to_key(dis);
     } else if (workload_type == WorkLoadType::zipf) {
-      key = mehcached_zipf_next(&state);
+      dis = mehcached_zipf_next(&state);
+      key = to_key(dis);
     } else if (workload_type == WorkLoadType::gaussian_01 ||
                workload_type == WorkLoadType::gaussian_001) {
       key = gaussian_generator->next_id();
@@ -393,7 +392,7 @@ void bulk_load() {
     auto array = my_parition->array;
 
     for (uint64_t i = 0; i < num; ++i) {
-      Key smart_k = to_key(array[i]);
+      Key smart_k = int2key(array[i]);
       // std::cout << i << " start insert key-------------- " << array[i]
       //           << std::endl;
       tree->insert(smart_k, randval(e));
@@ -543,7 +542,7 @@ void thread_run(int id) {
     uint64_t key_value = thread_warmup_array[counter];
     op_type cur_op = static_cast<op_type>(key_value >> 56);
     key_value = key_value & op_mask;
-    Key key = to_key(key_value);
+    Key key = int2key(key_value);
     switch (cur_op) {
       case op_type::Lookup: {
         Value v;
@@ -610,7 +609,7 @@ void thread_run(int id) {
     uint64_t key_value = thread_workload_array[counter];
     op_type cur_op = static_cast<op_type>(key_value >> 56);
     key_value = key_value & op_mask;
-    Key key = to_key(key_value);
+    Key key = int2key(key_value);
 
     if (counter % 20 == 0) {
       thread_timer.begin();
@@ -831,7 +830,7 @@ int main(int argc, char *argv[]) {
 
     if (dsm->getMyNodeID() == 0) {
       for (uint64_t i = 1; i < 1024000; ++i) {
-        tree->insert(to_key(i), i * 2);
+        tree->insert(int2key(i), i * 2);
       }
     }
 
