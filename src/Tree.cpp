@@ -1605,7 +1605,11 @@ bool Tree::leaf_node_update(const GlobalAddress& node_addr, const GlobalAddress&
     return true;
   }
 #endif
-  assert(i != (int)define::leafSpanSize);
+  // assert(i != (int)define::leafSpanSize);
+  if (i == (int)define::leafSpanSize) {
+    unlock_node(node_addr, lock_buffer, true, sink, true);
+    return true; //no key
+  }
 #endif
 #ifdef SPECULATIVE_READ
   idx_cache->add_to_cache(node_addr, i, k);
