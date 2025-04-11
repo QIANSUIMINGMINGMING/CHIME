@@ -379,7 +379,7 @@ void bulk_load() {
   // std::endl;
 
   partition_info *all_partition = new partition_info[LOADER_NUM];
-  uint64_t each_partition = bulk_load_num / LOADER_NUM;
+  uint64_t each_partition = bulk_load_num / (LOADER_NUM * CNodeCount);
 
   for (uint64_t i = 0; i < LOADER_NUM; ++i) {
     all_partition[i].id = i + node_id * LOADER_NUM;

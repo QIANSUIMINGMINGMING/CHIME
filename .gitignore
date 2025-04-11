@@ -16,3 +16,4 @@ exp/backup
 *.pub
 *.bat
 *.zip
+.cache
