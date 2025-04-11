@@ -92,8 +92,10 @@ WorkLoadType workload_type;
 std::vector<uint64_t> throughput_vec;
 std::vector<uint64_t> straggler_throughput_vec;
 
-std::array<uint8_t, 8> *workload_array = nullptr;
-std::array<uint8_t, 8> *warmup_array = nullptr;
+// std::array<uint8_t, 8> *workload_array = nullptr;
+// std::array<uint8_t, 8> *warmup_array = nullptr;
+uint64_t *workload_array = nullptr;
+uint64_t *warmup_array = nullptr;
 
 enum op_type : uint8_t { Insert, Update, Lookup, Delete, Range };
 uint64_t op_mask = (1ULL << 56) - 1;
@@ -149,27 +151,24 @@ void init_key_generator() {
 
 static int key_id = 0;
 
-Key generate_key() {
+uint64_t generate_key() {
   // static int counter = 0;
-  Key key;
-  uint64_t dis;
+  // Key key;
+  uint64_t key;
   while (true) {
     if (workload_type == WorkLoadType::uniform) {
-      dis = uniform_generator->next_id();
-      key = to_key(dis);
+      key = uniform_generator->next_id();
     } else if (workload_type == WorkLoadType::zipf) {
-      dis = mehcached_zipf_next(&state);
-      key = to_key(dis);
+      key = mehcached_zipf_next(&state);
     } else if (workload_type == WorkLoadType::gaussian_01 ||
                workload_type == WorkLoadType::gaussian_001) {
-      dis = gaussian_generator->next_id();
-      key = to_key(dis);
+      key = gaussian_generator->next_id();
     } else {
       assert(false);
     }
-    if (dis >= 0 && dis < kKeySpace) {
+    if (key >= 0 && key < kKeySpace) {
       if (key_id < 10) {
-        std::cout << dis << std::endl;
+        std::cout << key << std::endl;
       }
       key_id++;
       break;
@@ -227,7 +226,7 @@ void generate_workload() {
   // auto updatemark = insertmark + kUpdateRatio;
   std::cout << "node warmup insert num = " << warmup_insert_key_num
             << std::endl;
-  warmup_array = new std::array<uint8_t, 8>[warmup_num];
+  warmup_array = new uint64_t[warmup_num];
   std::cout << "kReadRatio =" << kReadRatio << std::endl;
   std::cout << "insertmark =" << insertmark << std::endl;
   std::cout << "updatemark =" << updatemark << std::endl;
@@ -244,7 +243,7 @@ void generate_workload() {
     while (i < warmup_insert_key_num) {
       uint64_t key = (insert_array[insert_counter] |
                       (static_cast<uint64_t>(op_type::Insert) << 56));
-      warmup_array[i] = to_key(key);
+      warmup_array[i] = key;
       ++insert_counter;
       ++i;
     }
@@ -254,13 +253,9 @@ void generate_workload() {
     per_node_warmup_num = (warmup_num / totalThreadCount) * kThreadCount;
     while (i < per_node_warmup_num) {
       random_num = rng.next_uint32() % 100;
-      Key key = generate_key();
+      uint64_t key_value = generate_key();
 
       // Convert Key to uint64_t for bitwise operations
-      uint64_t key_value = 0;
-      for (int j = 0; j < 8; j++) {
-        key_value |= (static_cast<uint64_t>(key[j]) << (j * 8));
-      }
 
       // Perform bitwise operations on the uint64_t value
       if (random_num < kReadRatio) {
@@ -276,7 +271,7 @@ void generate_workload() {
       }
 
       // Store the uint64_t value directly in warmup_array
-      warmup_array[i] = to_key(key_value);
+      warmup_array[i] = key_value;
       ++i;
     }
   }
@@ -287,7 +282,7 @@ void generate_workload() {
   }
   std::cout << "Finish warmup workload generation" << std::endl;
 
-  workload_array = new std::array<uint8_t, 8>[op_num];
+  workload_array = new uint64_t[op_num];
   i = 0;
   insert_array = insert_array + insert_counter;
   insert_counter = 0;
@@ -300,7 +295,7 @@ void generate_workload() {
     while (i < workload_insert_key_num) {
       uint64_t key = (insert_array[insert_counter] |
                       (static_cast<uint64_t>(op_type::Insert) << 56));
-      workload_array[i] = to_key(key);
+      workload_array[i] = key;
       ++insert_counter;
       ++i;
     }
@@ -310,11 +305,8 @@ void generate_workload() {
     per_node_op_num = (op_num / totalThreadCount) * kThreadCount;
     while (i < per_node_op_num) {
       random_num = rng.next_uint32() % 100;
-      Key key = generate_key();
-      uint64_t key_value = 0;
-      for (int j = 0; j < 8; j++) {
-        key_value |= (static_cast<uint64_t>(key[j]) << (j * 8));
-      }
+      uint64_t key_value = generate_key();
+
       if (key_value)
         if (random_num < kReadRatio) {
           key_value =
@@ -331,7 +323,7 @@ void generate_workload() {
         } else {
           key_value = key_value | (static_cast<uint64_t>(op_type::Range) << 56);
         }
-      workload_array[i] = to_key(key_value);
+      workload_array[i] = key_value;
       ++i;
     }
   }
@@ -513,9 +505,9 @@ void thread_run(int id) {
   // cachepush::decision.clear();
   // cachepush::decision.set_total_num(total_num[idx]);
   // Every thread set its own warmup/workload range
-  std::array<uint8_t, 8> *thread_workload_array =
+  uint64_t *thread_workload_array =
       workload_array + id * per_thread_op_num;
-  std::array<uint8_t, 8> *thread_warmup_array =
+  uint64_t *thread_warmup_array =
       warmup_array + id * per_thread_warmup_num;
   // uint64_t *thread_workload_array = new uint64_t[thread_op_num];
   // uint64_t *thread_warmup_array = new uint64_t[thread_warmup_num];
@@ -548,9 +540,10 @@ void thread_run(int id) {
     // }
 
     // }
-    std::array<uint8_t, 8> key = thread_warmup_array[counter];
-    op_type cur_op = static_cast<op_type>(key[7]);
-    key[7] = 0;
+    uint64_t key_value = thread_warmup_array[counter];
+    op_type cur_op = static_cast<op_type>(key_value >> 56);
+    key_value = key_value & op_mask;
+    Key key = to_key(key_value);
     switch (cur_op) {
       case op_type::Lookup: {
         Value v;
@@ -614,9 +607,11 @@ void thread_run(int id) {
     //   std::cout << "work counter: " << counter << std::endl;
     //   pre_counter = counter;
     // }
-    std::array<uint8_t, 8> key = thread_workload_array[counter];
-    op_type cur_op = static_cast<op_type>(key[7]);
-    key[7] = 0;
+    uint64_t key_value = thread_workload_array[counter];
+    op_type cur_op = static_cast<op_type>(key_value >> 56);
+    key_value = key_value & op_mask;
+    Key key = to_key(key_value);
+
     if (counter % 20 == 0) {
       thread_timer.begin();
     }
