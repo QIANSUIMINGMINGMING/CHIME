@@ -1594,7 +1594,11 @@ bool Tree::leaf_node_update(const GlobalAddress& node_addr, const GlobalAddress&
     return true;
   }
 #endif
-  assert(j != (int)define::neighborSize);
+  // assert(j != (int)define::neighborSize);
+  if (i == (int)define::leafSpanSize) {
+    unlock_node(node_addr, lock_buffer, true, sink, true);
+    return true; // no key
+  }
 #else
   for (i = 0; i < (int)define::leafSpanSize; ++ i) if (records[i].key == k) break;
 #ifdef SIBLING_BASED_VALIDATION
