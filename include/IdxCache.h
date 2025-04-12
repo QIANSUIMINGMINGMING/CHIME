@@ -176,7 +176,9 @@ inline void IdxCache::evict_one() {
   auto find_lfu_idx = [](IdxCacheEntry **bucket, int& min_idx, int& min_freq){
     for (int i = 0; i < BUCKET_SIZE; ++ i) {
       const auto& e = bucket[i];
-      if (e && e->cache_entry_freq < min_freq) min_idx = i, min_freq = e->cache_entry_freq;
+      if (e != nullptr) { 
+        if (e->cache_entry_freq < min_freq) min_idx = i, min_freq = e->cache_entry_freq;
+      }
     }
   };
 
