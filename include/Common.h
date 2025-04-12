@@ -107,7 +107,7 @@ namespace define
   constexpr uint64_t rdmaBufferSize = 4; // GB  [CONFIG] 4
 
   // Cache (MB)
-  constexpr int kIndexCacheSize = 334; // [MODIFIED BY sed_cache_size]
+  constexpr int kIndexCacheSize = 384; // [MODIFIED BY sed_cache_size]
   constexpr int kHotspotBufSize = 50;  // [MODIFIED BY sed_hotspot_buffer_size]
 
   // KV
