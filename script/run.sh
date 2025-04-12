@@ -71,7 +71,7 @@ distribution=(0 1 2 3)
 zipf=(0.99)
 bulk=60
 warmup=10
-runnum=60
+runnum=20
 nodenum=5
 
 
