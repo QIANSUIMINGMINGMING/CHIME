@@ -210,7 +210,7 @@ void Tree::lock_node(const GlobalAddress &node_addr, uint64_t *lock_buffer, bool
 
   uint64_t retry_cnt = 0;
 re_acquire:
-  if (retry_cnt++ > 100) {
+  if (retry_cnt++ > 10000) {
     std::cout << "Deadlock " << node_addr << std::endl;
     std::cout << "is_leaf=" << is_leaf << std::endl;
     assert(false);
