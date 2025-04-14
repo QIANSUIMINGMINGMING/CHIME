@@ -923,6 +923,8 @@ int main(int argc, char *argv[]) {
           std::string("sum-") + std::string("-") + std::to_string(iter),
           (uint64_t)(per_node_tp * 1000), CNodeCount);
 
+      monitor_exit.store(true);  // Signal monitor thread to exit
+
       // uint64_t cluster_tp = 0;
       printf("%d, throughput %.4f\n", dsm->getMyNodeID(), per_node_tp);
       // save_latency(iter);
