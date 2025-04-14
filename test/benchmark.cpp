@@ -882,7 +882,7 @@ int main(int argc, char *argv[]) {
     std::thread monitor_thread([&monitor_exit]() {
       // Wait for 5 minutes (300 seconds)
       std::this_thread::sleep_for(std::chrono::seconds(100));
-      if (!monitor_exit.load()) {
+      if (true) {
         std::cerr << "Monitor thread: Program has been running for too long. "
                      "Forcing exit."
                   << std::endl;
