@@ -1013,7 +1013,7 @@ void Tree::segment_write_and_unlock(LeafNode* leaf, int l_idx, int r_idx, const 
   auto& records = leaf->records;
   const auto& metadata = leaf->metadata;
   auto lock_offset = get_lock_info(true);
-  // assert(!(*lock_buffer & (1ULL << 63)));
+  assert(!(*lock_buffer & (1ULL << 63)));
 
 #ifdef VACANCY_AWARE_LOCK
   auto if_lock = (VALOCK *)lock_buffer;
