@@ -968,10 +968,15 @@ int main(int argc, char *argv[]) {
       ++iter;
     }  // while(true) loop
        //});
-
+    std::chrono::high_resolution_clock::time_point sleep_start = std::chrono::high_resolution_clock::now();
     sleep(2);
     while (worker.load() != 0) {
       sleep(2);
+      auto sleep_end = std::chrono::high_resolution_clock::now();
+      auto sleep_duration = std::chrono::duration_cast<std::chrono::seconds>(sleep_end - sleep_start).count();
+      if (sleep_duration > 30) {
+        exit(0);
+      }
     }
 
     for (int i = 0; i < kThreadCount; i++) {
