@@ -94,7 +94,7 @@ private:
 
   // lock
   static uint64_t get_lock_info(bool is_leaf);
-  void lock_node(const GlobalAddress &node_addr, uint64_t* lock_buffer, bool is_leaf, CoroPull* sink);
+  bool lock_node(const GlobalAddress &node_addr, uint64_t* lock_buffer, bool is_leaf, CoroPull* sink);
   void unlock_node(const GlobalAddress &node_addr, uint64_t* lock_buffer, bool is_leaf, CoroPull* sink, bool async = false);
 
   // search

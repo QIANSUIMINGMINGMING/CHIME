@@ -199,7 +199,7 @@ inline uint64_t Tree::get_lock_info(bool is_leaf) {
 }
 
 
-void Tree::lock_node(const GlobalAddress &node_addr, uint64_t *lock_buffer, bool is_leaf, CoroPull* sink) {
+bool Tree::lock_node(const GlobalAddress &node_addr, uint64_t *lock_buffer, bool is_leaf, CoroPull* sink) {
   auto lock_offset = get_lock_info(is_leaf);
 
   // lock function
@@ -213,7 +213,7 @@ re_acquire:
   if (retry_cnt++ > 1000) {
     std::cout << "Deadlock " << node_addr << std::endl;
     std::cout << "is_leaf=" << is_leaf << std::endl;
-    return;
+    return false;
   }
 
   if (!acquire_lock(node_addr)){
@@ -224,7 +224,7 @@ re_acquire:
     lock_fail[dsm->getMyThreadID()] ++;
     goto re_acquire;
   }
-  return;
+  return true;
 }
 
 void Tree::unlock_node(const GlobalAddress &node_addr, uint64_t* lock_buffer, bool is_leaf, CoroPull* sink, bool async) {
@@ -414,7 +414,9 @@ bool Tree::leaf_node_insert(const GlobalAddress& node_addr, const GlobalAddress&
                            bool from_cache, CoroPull* sink) {
   // lock node
   auto lock_buffer = (dsm->get_rbuf(sink)).get_lock_buffer();
-  lock_node(node_addr, lock_buffer, true, sink);
+  if (!lock_node(node_addr, lock_buffer, true, sink)) {
+    return true;
+  }
   int read_entry_num = define::leafSpanSize;
 #if (defined HOPSCOTCH_LEAF_NODE && defined VACANCY_AWARE_LOCK)
   auto if_lock = (VALOCK *)lock_buffer;
@@ -1122,7 +1124,9 @@ bool Tree::internal_node_insert(const GlobalAddress& node_addr, const Key &k, co
                                CoroPull* sink) {
   // lock node
   auto lock_buffer = (dsm->get_rbuf(sink)).get_lock_buffer();
-  lock_node(node_addr, lock_buffer, false, sink);
+  while (!lock_node(node_addr, lock_buffer, false, sink)) {
+    sleep(1);
+  }
   // read internal node
   auto raw_internal_buffer = (dsm->get_rbuf(sink)).get_internal_buffer();
   auto internal_buffer = (dsm->get_rbuf(sink)).get_internal_buffer();
@@ -1514,7 +1518,9 @@ bool Tree::leaf_node_update(const GlobalAddress& node_addr, const GlobalAddress&
   try_read_leaf[dsm->getMyThreadID()] ++;
   // lock node
   auto lock_buffer = (dsm->get_rbuf(sink)).get_lock_buffer();
-  lock_node(node_addr, lock_buffer, true, sink);
+  if (!lock_node(node_addr, lock_buffer, true, sink)) {
+    return true;
+  }
   // read leaf
   auto raw_leaf_buffer = (dsm->get_rbuf(sink)).get_leaf_buffer();
   auto leaf_buffer = (dsm->get_rbuf(sink)).get_leaf_buffer();
