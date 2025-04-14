@@ -504,10 +504,8 @@ void thread_run(int id) {
   // cachepush::decision.clear();
   // cachepush::decision.set_total_num(total_num[idx]);
   // Every thread set its own warmup/workload range
-  uint64_t *thread_workload_array =
-      workload_array + id * per_thread_op_num;
-  uint64_t *thread_warmup_array =
-      warmup_array + id * per_thread_warmup_num;
+  uint64_t *thread_workload_array = workload_array + id * per_thread_op_num;
+  uint64_t *thread_warmup_array = warmup_array + id * per_thread_warmup_num;
   // uint64_t *thread_workload_array = new uint64_t[thread_op_num];
   // uint64_t *thread_warmup_array = new uint64_t[thread_warmup_num];
   // memcpy(thread_workload_array, thread_workload_array_in_global,
@@ -878,6 +876,21 @@ int main(int argc, char *argv[]) {
 
     std::cout << "Start collecting the statistic" << std::endl;
     start = std::chrono::high_resolution_clock::now();
+
+    // Create a monitor thread to exit if waiting too long
+    std::atomic<bool> monitor_exit{false};
+    std::thread monitor_thread([&monitor_exit]() {
+      // Wait for 5 minutes (300 seconds)
+      std::this_thread::sleep_for(std::chrono::seconds(100));
+      if (!monitor_exit.load()) {
+        std::cerr << "Monitor thread: Program has been running for too long. "
+                     "Forcing exit."
+                  << std::endl;
+        exit(1);
+      }
+    });
+    monitor_thread.detach();
+
     // System::profile("dex-test", [&]() {
     int iter = 0;
     while (true) {
@@ -929,6 +942,7 @@ int main(int argc, char *argv[]) {
                   .count();
           std::cout << "The time duration = " << duration << " seconds"
                     << std::endl;
+          monitor_exit.store(true);  // Signal monitor thread to exit
           break;
         }
 
@@ -943,6 +957,7 @@ int main(int argc, char *argv[]) {
             std::cout << "Running time is larger than " << 60 << "seconds"
                       << std::endl;
             per_thread_op_num = 0;
+            monitor_exit.store(true);  // Signal monitor thread to exit
             break;
           }
         }
@@ -951,7 +966,10 @@ int main(int argc, char *argv[]) {
           start_generate_throughput = true;
         }
 
-        if (start_generate_throughput && per_node_tp == 0) break;
+        if (start_generate_throughput && per_node_tp == 0) {
+          monitor_exit.store(true);  // Signal monitor thread to exit
+          break;
+        }
 
         if (start_generate_throughput) {
           ++collect_times;
@@ -961,6 +979,7 @@ int main(int argc, char *argv[]) {
                   .count();
           if (time_based && duration > 60) {
             per_thread_op_num = 0;
+            monitor_exit.store(true);  // Signal monitor thread to exit
             break;
           }
         }
@@ -968,12 +987,15 @@ int main(int argc, char *argv[]) {
       ++iter;
     }  // while(true) loop
        //});
-    std::chrono::high_resolution_clock::time_point sleep_start = std::chrono::high_resolution_clock::now();
+    std::chrono::high_resolution_clock::time_point sleep_start =
+        std::chrono::high_resolution_clock::now();
     sleep(2);
     while (worker.load() != 0) {
       sleep(2);
       auto sleep_end = std::chrono::high_resolution_clock::now();
-      auto sleep_duration = std::chrono::duration_cast<std::chrono::seconds>(sleep_end - sleep_start).count();
+      auto sleep_duration = std::chrono::duration_cast<std::chrono::seconds>(
+                                sleep_end - sleep_start)
+                                .count();
       if (sleep_duration > 30) {
         exit(0);
       }
