@@ -819,7 +819,7 @@ void Tree::hopscotch_split_and_unlock(LeafNode* leaf, const Key& k, Value v, con
   VersionManager<LeafNode, LeafEntry>::encode_node_versions((char *)leaf, encoded_leaf_buffer);
 #endif
   auto lock_offset = get_lock_info(true);
-  // assert(!(*lock_buffer & (1ULL << 63)));
+  assert(!(*lock_buffer & (1ULL << 63)));
 #ifdef SPLIT_WRITE_UNLATCH
   memcpy(encoded_leaf_buffer + lock_offset, lock_buffer, sizeof(uint64_t));  // unlock
   // no need to signal
@@ -1253,7 +1253,7 @@ void Tree::node_split_and_unlock(NODE* node, const Key& k, VAL v, const GlobalAd
   auto encoded_node_buffer = (dsm->get_rbuf(sink)).get_node_buffer<NODE>();
   VersionManager<NODE, ENTRY>::encode_node_versions((char *)node, encoded_node_buffer);
   auto lock_offset = get_lock_info(NODE::IS_LEAF);
-  // assert(!(*lock_buffer & (1ULL << 63)));
+  assert(!(*lock_buffer & (1ULL << 63)));
 #ifdef SPLIT_WRITE_UNLATCH
   memcpy(encoded_node_buffer + lock_offset, lock_buffer, sizeof(uint64_t));  // unlock
   // no need to signal
@@ -1360,7 +1360,7 @@ void Tree::entry_write_and_unlock(NODE* node, const int idx, const Key& k, VAL v
 #endif
   // write entry and unlock
   auto lock_offset = get_lock_info(NODE::IS_LEAF);
-  // assert(!(*lock_buffer & (1ULL << 63)));
+  assert(!(*lock_buffer & (1ULL << 63)));
   if (idx == (NODE::IS_LEAF ? define::leafSpanSize : define::internalSpanSize) - 1) {
     auto node_size = NODE::IS_LEAF ? define::transLeafSize : define::transInternalSize;
     memcpy(encoded_entry_buffer + raw_len + lock_offset - node_size, lock_buffer, sizeof(uint64_t));  // unlock
@@ -1392,7 +1392,7 @@ void Tree::node_write_and_unlock(NODE* node, const GlobalAddress& node_addr, uin
   VersionManager<NODE, ENTRY>::encode_node_versions((char*)node, encoded_node_buffer);
   // write node and unlock
   auto lock_offset = get_lock_info(NODE::IS_LEAF);
-  // assert(!(*lock_buffer & (1ULL << 63)));
+  assert(!(*lock_buffer & (1ULL << 63)));
 #ifdef SPLIT_WRITE_UNLATCH
   memcpy(encoded_node_buffer + lock_offset, lock_buffer, sizeof(uint64_t));  // unlock
   dsm->write_sync(encoded_node_buffer, node_addr, TRANS_SIZE + define::allocationLockSize, sink);
