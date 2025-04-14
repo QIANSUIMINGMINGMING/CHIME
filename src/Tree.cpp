@@ -213,7 +213,7 @@ re_acquire:
   if (retry_cnt++ > 100000) {
     std::cout << "Deadlock " << node_addr << std::endl;
     std::cout << "is_leaf=" << is_leaf << std::endl;
-    assert(false);
+    return;
   }
 
   if (!acquire_lock(node_addr)){
