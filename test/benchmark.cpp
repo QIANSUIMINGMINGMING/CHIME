@@ -601,7 +601,7 @@ void thread_run(int id) {
   success_counter = 0;
   auto start = std::chrono::high_resolution_clock::now();
   Timer thread_timer;
-  while (counter < per_thread_op_num) {
+  while (counter < per_thread_op_num && !one_finish.load()) {
     // if (counter - pre_counter > 1000) {
     //   std::cout << "work counter: " << counter << std::endl;
     //   pre_counter = counter;
