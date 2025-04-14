@@ -516,7 +516,7 @@ void thread_run(int id) {
   //        sizeof(uint64_t) * thread_warmup_num);
   size_t counter = 0;
   size_t success_counter = 0;
-  uint32_t scan_num = 500;
+  uint32_t scan_num = 100;
 
   int pre_counter = 0;
   while (counter < per_thread_warmup_num) {
