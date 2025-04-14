@@ -448,7 +448,7 @@ bool Tree::leaf_node_insert(const GlobalAddress& node_addr, const GlobalAddress&
     dsm->read_sync(raw_leaf_buffer, node_addr, define::transLeafSize, sink);
 #ifdef METADATA_REPLICATION
     auto intermediate_leaf_buffer = (dsm->get_rbuf(sink)).get_leaf_buffer();
-    // assert((LeafVersionManager::decode_node_versions(raw_leaf_buffer, intermediate_leaf_buffer)));
+    assert((LeafVersionManager::decode_node_versions(raw_leaf_buffer, intermediate_leaf_buffer)));
     MetadataManager::decode_node_metadata(intermediate_leaf_buffer, leaf_buffer);
 #else
     assert((VersionManager<LeafNode, LeafEntry>::decode_node_versions(raw_leaf_buffer, leaf_buffer)));
