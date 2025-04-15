@@ -58,7 +58,7 @@ option (HOPSCOTCH_LEAF_NODE "+ Hopscotch leaf node" ON)
 option (VACANCY_AWARE_LOCK "+ Vacancy bitmap piggybacking" OFF)
 option (METADATA_REPLICATION "+ Leaf metadata replication" ON)
 option (SIBLING_BASED_VALIDATION "+ Sibling-based validation" ON)
-option (SPECULATIVE_READ "+ Speculative read" ON)
+option (SPECULATIVE_READ "+ Speculative read" OFF)
 # Variable-length KV
 option (ENABLE_VAR_LEN_KV "Turn on the support for variable-length KVs" OFF)
 
