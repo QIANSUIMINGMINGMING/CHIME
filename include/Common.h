@@ -108,7 +108,7 @@ namespace define
 
   // Cache (MB)
   constexpr int kIndexCacheSize = 384; // [MODIFIED BY sed_cache_size]
-  constexpr int kHotspotBufSize = 50;  // [MODIFIED BY sed_hotspot_buffer_size]
+  constexpr int kHotspotBufSize = 0;  // [MODIFIED BY sed_hotspot_buffer_size]
 
   // KV
   constexpr uint64_t kKeyMin = 1;
