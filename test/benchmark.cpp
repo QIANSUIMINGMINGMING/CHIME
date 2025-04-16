@@ -878,19 +878,6 @@ int main(int argc, char *argv[]) {
     start = std::chrono::high_resolution_clock::now();
 
     // Create a monitor thread to exit if waiting too long
-    std::atomic<bool> monitor_exit{false};
-    std::thread monitor_thread([&monitor_exit]() {
-      // Wait for 5 minutes (300 seconds)
-      std::this_thread::sleep_for(std::chrono::seconds(100));
-      if (true) {
-        std::cerr << "Monitor thread: Program has been running for too long. "
-                     "Forcing exit."
-                  << std::endl;
-        exit(1);
-      }
-    });
-    monitor_thread.detach();
-
     // System::profile("dex-test", [&]() {
     int iter = 0;
     while (true) {
@@ -923,11 +910,20 @@ int main(int argc, char *argv[]) {
           std::string("sum-") + std::string("-") + std::to_string(iter),
           (uint64_t)(per_node_tp * 1000), CNodeCount);
 
-      monitor_exit.store(true);  // Signal monitor thread to exit
 
       // uint64_t cluster_tp = 0;
       printf("%d, throughput %.4f\n", dsm->getMyNodeID(), per_node_tp);
       // save_latency(iter);
+
+      auto monitor_end = std::chrono::high_resolution_clock::now();
+
+      auto monitor_duration = std::chrono::duration_cast<std::chrono::seconds>(monitor_end - start).count();
+      if (monitor_duration > 60) {
+        std::cerr << "Monitor thread: Program has been running for too long. "
+                     "Forcing exit."
+                  << std::endl;
+        exit(1);
+      }
 
       if (dsm->getMyNodeID() == 0) {
         printf("cluster throughput %.3f\n", cluster_tp / 1000.0);
@@ -944,7 +940,6 @@ int main(int argc, char *argv[]) {
                   .count();
           std::cout << "The time duration = " << duration << " seconds"
                     << std::endl;
-          monitor_exit.store(true);  // Signal monitor thread to exit
           break;
         }
 
@@ -959,7 +954,6 @@ int main(int argc, char *argv[]) {
             std::cout << "Running time is larger than " << 60 << "seconds"
                       << std::endl;
             per_thread_op_num = 0;
-            monitor_exit.store(true);  // Signal monitor thread to exit
             break;
           }
         }
@@ -969,7 +963,6 @@ int main(int argc, char *argv[]) {
         }
 
         if (start_generate_throughput && per_node_tp == 0) {
-          monitor_exit.store(true);  // Signal monitor thread to exit
           break;
         }
 
@@ -981,7 +974,6 @@ int main(int argc, char *argv[]) {
                   .count();
           if (time_based && duration > 60) {
             per_thread_op_num = 0;
-            monitor_exit.store(true);  // Signal monitor thread to exit
             break;
           }
         }
