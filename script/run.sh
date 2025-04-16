@@ -118,7 +118,7 @@ distribution=(0 1 2 3)
 zipf=(0.99)
 bulk=60
 warmup=1
-runnum=60
+runnum=5
 nodenum=5
 
 SELF_IP=$(hostname -I | awk '{print $1}')

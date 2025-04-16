@@ -609,7 +609,7 @@ void thread_run(int id) {
     key_value = key_value & op_mask;
     Key key = int2key(key_value);
 
-    if (counter % 20 == 0) {
+    if (counter % 48 == id) {
       thread_timer.begin();
     }
 
@@ -637,7 +637,7 @@ void thread_run(int id) {
       default:
         std::cout << "OP Type NOT MATCH!" << std::endl;
     }
-    if (counter % 20 == 19) {
+    if (counter % 48 == id) {
       auto us_10 = thread_timer.end() / 100;
       if (us_10 >= LATENCY_WINDOWS) {
         us_10 = LATENCY_WINDOWS - 1;
@@ -994,6 +994,7 @@ int main(int argc, char *argv[]) {
         exit(0);
       }
     }
+
 
     for (int i = 0; i < kThreadCount; i++) {
       ths[i].join();
